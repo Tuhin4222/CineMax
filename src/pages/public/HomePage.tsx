@@ -1,136 +1,96 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useMovies } from '../../contexts/MovieContext';
 import MovieCard from '../../components/MovieCard';
 import Hero from '../../components/Hero';
 import { Search, Filter } from 'lucide-react';
+import sanityClient from '../../sanityClient'; // আপনার Sanity ক্লায়েন্ট
+
+// Sanity থেকে আসা ডেটার জন্য একটি টাইপ
+interface Movie {
+  _id: string;
+  title: string;
+  description: string;
+  genre: string[];
+  posterUrl?: string;
+  // MovieCard-এর জন্য প্রয়োজনীয় অন্যান্য ফিল্ড, যেমন rating, year ইত্যাদি
+  rating?: number;
+  year?: number;
+}
 
 const HomePage: React.FC = () => {
-  const { movies } = useMovies();
   const [searchParams] = useSearchParams();
-  const [filteredMovies, setFilteredMovies] = useState(movies);
+  const [allMovies, setAllMovies] = useState<Movie[]>([]); // Sanity থেকে আসা সব মুভি
+  const [filteredMovies, setFilteredMovies] = useState<Movie[]>([]); // ফিল্টার করা মুভি
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
-  const searchQuery = searchParams.get('search') || '';
-  const genreParam = searchParams.get('genre') || '';
-
+  // ধাপ ১: Sanity থেকে সব মুভি নিয়ে আসা
   useEffect(() => {
-    let filtered = movies;
+    sanityClient
+      .fetch<Movie[]>(
+        `*[_type == "movie"]{
+            _id,
+            title,
+            "description": plot,
+            genre,
+            rating,
+            year,
+            "posterUrl": poster.asset->url
+        }`
+      )
+      .then((data) => {
+        setAllMovies(data);
+        setFilteredMovies(data); // শুরুতে সব মুভিই দেখানো হবে
+      })
+      .catch(console.error);
+  }, []); // [] মানে এই ইফেক্ট শুধু একবার চলবে
 
-    // Apply search filter
+  // ধাপ ২: সার্চ, জেনার এবং সর্টিং এর জন্য ফিল্টার করা
+  useEffect(() => {
+    let moviesToFilter = [...allMovies];
+    const searchQuery = searchParams.get('search') || '';
+    const genreParam = searchParams.get('genre') || 'all';
+
+    // সার্চ অনুযায়ী ফিল্টার
     if (searchQuery) {
-      filtered = filtered.filter(movie =>
-        movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        movie.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        movie.genre.some(g => g.toLowerCase().includes(searchQuery.toLowerCase()))
+      moviesToFilter = moviesToFilter.filter(movie =>
+        movie.title.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    // Apply genre filter
-    const currentGenre = genreParam || selectedGenre;
-    if (currentGenre && currentGenre !== 'all') {
-      filtered = filtered.filter(movie =>
-        movie.genre.some(g => g.toLowerCase() === currentGenre.toLowerCase())
+    // জেনার অনুযায়ী ফিল্টার
+    if (genreParam !== 'all') {
+      moviesToFilter = moviesToFilter.filter(movie =>
+        movie.genre?.includes(genreParam)
       );
     }
+    
+    // এখানে আপনি সর্টিং এর লজিক যোগ করতে পারেন, যেমন:
+    // if (sortBy === 'newest') { ... }
 
-    // Apply sorting
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'rating':
-          return b.rating - a.rating;
-        case 'year':
-          return b.year - a.year;
-        case 'title':
-          return a.title.localeCompare(b.title);
-        case 'newest':
-        default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }
-    });
+    setFilteredMovies(moviesToFilter);
+  }, [searchParams, allMovies, selectedGenre, sortBy]);
 
-    setFilteredMovies(filtered);
-  }, [movies, searchQuery, genreParam, selectedGenre, sortBy]);
-
-  const genres = ['all', ...Array.from(new Set(movies.flatMap(movie => movie.genre)))];
+  // ডেটা লোড হওয়ার সময় একটি মেসেজ দেখান
+  if (allMovies.length === 0) {
+    return <div>Loading your cinematic universe...</div>;
+  }
 
   return (
-    <div>
-      {/* Hero Section */}
-      {!searchQuery && !genreParam && (
-        <Hero />
-      )}
+    <>
+      <Hero movie={allMovies[0]} /> {/* হিরো সেকশনে প্রথম মুভিটি দেখানো যেতে পারে */}
 
-      {/* Content Section */}
       <div className="container mx-auto px-4 py-8">
-        {/* Search Results Header */}
-        {searchQuery && (
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-white mb-2">
-              Search Results for "{searchQuery}"
-            </h2>
-            <p className="text-gray-400">
-              Found {filteredMovies.length} {filteredMovies.length === 1 ? 'movie' : 'movies'}
-            </p>
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          {/* Genre Filter */}
-          <div className="flex items-center space-x-2">
-            <Filter className="w-5 h-5 text-gray-400" />
-            <select
-              value={genreParam || selectedGenre}
-              onChange={(e) => setSelectedGenre(e.target.value)}
-              className="bg-gray-800 text-white border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
-            >
-              {genres.map(genre => (
-                <option key={genre} value={genre}>
-                  {genre === 'all' ? 'All Genres' : genre}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Sort Filter */}
-          <div className="flex items-center space-x-2">
-            <span className="text-gray-400 text-sm">Sort by:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-gray-800 text-white border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
-            >
-              <option value="newest">Newest</option>
-              <option value="rating">Rating</option>
-              <option value="year">Year</option>
-              <option value="title">Title</option>
-            </select>
-          </div>
+        {/* এখানে আপনার সার্চ এবং ফিল্টার বার এর UI থাকবে */}
+        {/* <FilterBar ... /> */}
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+          {filteredMovies.map((movie) => (
+            <MovieCard key={movie._id} movie={movie} />
+          ))}
         </div>
-
-        {/* Movies Grid */}
-        {filteredMovies.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-            {filteredMovies.map(movie => (
-              <MovieCard key={movie.id} movie={movie} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-16">
-            <Search className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-400 mb-2">No movies found</h3>
-            <p className="text-gray-500">
-              {searchQuery 
-                ? `No movies match your search for "${searchQuery}"`
-                : 'No movies available in this category'
-              }
-            </p>
-          </div>
-        )}
       </div>
-    </div>
+    </>
   );
 };
 
