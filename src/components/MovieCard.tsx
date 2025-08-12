@@ -1,43 +1,40 @@
 import React from 'react';
-// আপনার MovieCardProps এর টাইপ ইম্পোর্ট করুন, যদি আলাদা ফাইলে থাকে
+import { Link } from 'react-router-dom'; // Link ব্যবহার করার জন্য
 
-// MovieCardProps এর একটি উদাহরণ
+// Sanity থেকে আসা ডেটার গঠন অনুযায়ী Props টাইপ
 interface MovieCardProps {
   movie: {
     _id: string;
     title: string;
-    description: string;
-    genre?: string[]; // genre কে অপশনাল করা হলো
-    poster?: string;
+    plot?: string;
+    posterUrl?: string; // poster এর পরিবর্তে posterUrl
   };
 }
 
 const MovieCard: React.FC<MovieCardProps> = ({ movie }) => {
-  return (
-    <div className="movie-card-container"> {/* একটি মূল কন্টেইনার যোগ করা হলো */}
-      {/* এখানে আপনার Link বা a ট্যাগ এবং ছবির কোড থাকবে */}
-      <img src={movie.poster} alt={movie.title} />
+  // যদি কোনো মুভির ডেটা না থাকে, তাহলে কিছুই দেখাবে না
+  if (!movie) {
+    return null;
+  }
 
-      <div className="p-4">
-        <h3 className="text-white font-semibold text-lg mb-2 group-hover:text-primary transition-all duration-300 ease-in-out">
-          {movie.title}
-        </h3>
-        <p className="text-gray-400 text-sm line-clamp-2 mb-3">
-          {movie.description}
-        </p>
-        <div className="flex flex-wrap gap-1">
-          {/* জেনার দেখানোর সঠিক কোড */}
-          {(movie.genre ?? []).slice(0, 2).map((g, index) => (
-            <span
-              key={index}
-              className="bg-gray-700 text-gray-300 text-xs px-2 py-1 rounded-full"
-            >
-              {g}
-            </span>
-          ))}
+  return (
+    <Link to={`/movie/${movie._id}`}> {/* প্রতিটি কার্ডকে একটি লিঙ্কে পরিণত করা হলো */}
+      <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-primary transition-all duration-300 ease-in-out">
+        <img
+          className="w-full h-64 object-cover"
+          src={movie.posterUrl || 'https://via.placeholder.com/300x450'} // যদি পোস্টার না থাকে, একটি প্লেসহোল্ডার দেখাবে
+          alt={movie.title}
+        />
+        <div className="p-4">
+          <h3 className="text-white font-semibold text-lg mb-2">
+            {movie.title}
+          </h3>
+          <p className="text-gray-400 text-sm line-clamp-2">
+            {movie.plot}
+          </p>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 
